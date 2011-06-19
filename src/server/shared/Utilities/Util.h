@@ -68,11 +68,15 @@ inline uint32 secsToTimeBitFields(time_t secs)
  * A double supports up to 15 valid decimal digits and is used internally (RAND32_MAX has 10 digits).
  * With an FPU, there is usually no difference in performance between float and double. */
  double rand_norm(void);
+ 
+ float rand_norm_f(void);
 
-/* Return a random double from 0.0 to 99.9999999999999. Floats support only 7 valid decimal digits.
+ /* Return a random double from 0.0 to 99.9999999999999. Floats support only 7 valid decimal digits.
  * A double supports up to 15 valid decimal digits and is used internaly (RAND32_MAX has 10 digits).
  * With an FPU, there is usually no difference in performance between float and double. */
  double rand_chance(void);
+ 
+ float rand_chance_f(void);
 
 /* Return true if a random roll fits in the specified chance (range 0-100). */
 inline bool roll_chance_f(float chance)
@@ -375,6 +379,13 @@ bool IsIPAddress(char const* ipaddress);
 uint32 CreatePIDFile(const std::string& filename);
 
 void hexEncodeByteArray(uint8* bytes, uint32 arrayLen, std::string& result);
+void hexDecodeString(const char *str, uint32 strlen, uint8* buffer);
+
+// Simple RC4 to work on 256+2 bytes keys
+void byteSwap(uint8 *a, uint8 *b);
+void rc4_init(uint8 *key_buffer, uint8 *base, uint32 base_length);
+void rc4_crypt(uint8 *key, uint8 *data, uint32 length);
+
 #endif
 
 //handler for operations on large flags

@@ -222,6 +222,8 @@ void WorldSession::HandleCharEnum(QueryResult result)
     data.put<uint8>(0, num);
 
     SendPacket(&data);
+    // It's time to begin warden activity
+    HandleWardenRegister();
 }
 
 void WorldSession::HandleCharEnumOpcode(WorldPacket & /*recv_data*/)
@@ -1401,9 +1403,6 @@ void WorldSession::HandleEquipmentSetDelete(WorldPacket &recv_data)
 
 void WorldSession::HandleEquipmentSetUse(WorldPacket &recv_data)
 {
-    if (_player->isInCombat())
-        return;
-
     sLog->outDebug(LOG_FILTER_NETWORKIO, "CMSG_EQUIPMENT_SET_USE");
     recv_data.hexlike();
 
