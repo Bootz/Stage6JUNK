@@ -23,7 +23,6 @@
 
 struct VehicleEntry;
 struct VehicleSeatEntry;
-struct Position;
 class Unit;
 
 enum PowerType
@@ -138,7 +137,6 @@ class Vehicle
         void RelocatePassengers(float x, float y, float z, float ang);
         void RemoveAllPassengers();
         void Dismiss();
-        void Relocate(Position pos);        
         bool IsVehicleInUse() { return m_Seats.begin() != m_Seats.end(); }
 
         SeatMap m_Seats;
