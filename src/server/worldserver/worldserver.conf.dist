@@ -2806,9 +2806,9 @@ Wardend.address = "127.0.0.1"
 
 #   Wardend.port
 #        Port on which the Warden Daemon listens
-#        Default: 6555
+#        Default: 4321
 
-Wardend.port = 6555
+Wardend.port = 4321
 
 #
 ###################################################################################################
