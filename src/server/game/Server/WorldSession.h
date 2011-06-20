@@ -745,7 +745,7 @@ class WorldSession
         void HandleWardenRegister();                        // for internal call
         void HandleWardenUnregister();                      // for internal call
         
-		void HandleWorldTeleportOpcode(WorldPacket& recv_data);
+		 void HandleWorldTeleportOpcode(WorldPacket& recv_data);
         void HandleMinimapPingOpcode(WorldPacket& recv_data);
         void HandleRandomRollOpcode(WorldPacket& recv_data);
         void HandleFarSightOpcode(WorldPacket& recv_data);

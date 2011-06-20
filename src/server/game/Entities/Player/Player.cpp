@@ -7376,6 +7376,7 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
         sOutdoorPvPMgr->HandlePlayerEnterZone(this, newZone);
         SendInitWorldStates(newZone, newArea);              // only if really enters to new zone, not just area change, works strange...
     }
+
      // Prevent players from accessing GM Island
     if (sWorld->getBoolConfig(CONFIG_PREVENT_PLAYERS_ACCESS_TO_GMISLAND))
     {
@@ -7385,7 +7386,7 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
             TeleportTo(13, 1.118799f, 0.477914f, -144.708650f, 3.133046f);
         }
     }
-
+ 
     m_zoneUpdateId    = newZone;
     m_zoneUpdateTimer = ZONE_UPDATE_INTERVAL;
 
