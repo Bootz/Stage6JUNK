@@ -209,7 +209,7 @@ class WardenMgr
         ACE_SOCK_Stream *m_WardenProcessStream;
         ACE_SOCK_Connector *m_WardenProcessConnection;
 
-        bool                    m_HalfCall;
+        bool m_HalfCall;
         bool m_Enabled;
         bool m_PingOut;
         bool m_Disconnected;
@@ -219,7 +219,7 @@ class WardenMgr
         WardendConnector m_connector;
         IntervalTimer m_PingTimer;
 
-        WardenModuleMap         m_WardenModuleMap;
+        WardenModuleMap m_WardenModuleMap;
 
         WardenMemoryChecks m_WardenMemoryChecks;
         WardenPageChecks m_WardenPageChecks;
