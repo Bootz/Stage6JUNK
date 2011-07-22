@@ -476,10 +476,10 @@ class spell_gen_trick_or_treat : public SpellScriptLoader
 
             void HandleScript(SpellEffIndex /*effIndex*/)
             {
-                if (Player* pTarget = GetHitPlayer())
+                if (Player* target = GetHitPlayer())
                 {
-                    GetCaster()->CastSpell(pTarget, roll_chance_i(50) ? SPELL_TRICK : SPELL_TREAT, true, NULL);
-                    GetCaster()->CastSpell(pTarget, SPELL_TRICKED_OR_TREATED, true, NULL);
+                    GetCaster()->CastSpell(target, roll_chance_i(50) ? SPELL_TRICK : SPELL_TREAT, true, NULL);
+                    GetCaster()->CastSpell(target, SPELL_TRICKED_OR_TREATED, true, NULL);
                 }
             }
 
@@ -774,63 +774,6 @@ class spell_gen_dungeon_credit : public SpellScriptLoader
         }
 };
 
-enum ModelPerQuestProgress
-
-{
-    // PROG_0_4   = native,
-    PROG_5_9   = 29809,
-    PROG_10_14 = 29275,
-    PROG_15_20 = 29276,
-};
-
-// 66926 Venomhide Raptor Spawn Check
-class spell_gen_venomhide_check : public SpellScriptLoader
-{
-public:
-    spell_gen_venomhide_check() : SpellScriptLoader("spell_gen_venomhide_check") { }
-
-    class spell_gen_venomhide_check_AuraScript : public AuraScript
-    {
-        PrepareAuraScript(spell_gen_venomhide_check_AuraScript)
-        
-        void HandleEffectApply(AuraEffect const * /*aurEff*/, AuraEffectHandleModes /*mode*/)
-
-        {
-            Unit* target = GetTarget();
-            if (!target)
-                return;
-
-            Unit* owner = target->GetCharmerOrOwner();
-            if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
-                return;
-
-            // get queststatus
-            QuestStatusMap::const_iterator itr = owner->ToPlayer()->getQuestStatusMap().find(13906);
-            if (itr->second.m_status != QUEST_STATUS_INCOMPLETE)
-                return;
-
-            switch(uint8(itr->second.m_itemcount[1]/5))
-            {
-            case 1: target->SetDisplayId(PROG_5_9);   break;
-            case 2: target->SetDisplayId(PROG_10_14); break;
-            case 3: 
-            case 4: target->SetDisplayId(PROG_15_20); break;
-            default: return;
-            }
-        }
-
-        void Register()
-        {
-            OnEffectApply += AuraEffectApplyFn(spell_gen_venomhide_check_AuraScript::HandleEffectApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
-    {
-        return new spell_gen_venomhide_check_AuraScript();
-    }
-};
-
 class spell_gen_profession_research : public SpellScriptLoader
 {
     public:
@@ -861,45 +804,6 @@ class spell_gen_profession_research : public SpellScriptLoader
         {
             return new spell_gen_profession_research_SpellScript();
         }
-};
-
-// 67039 Argent Squire/Gruntling - Mounting Check - Aura
-class spell_gen_mounting_check : public SpellScriptLoader
-{
-public:
-    spell_gen_mounting_check() : SpellScriptLoader("spell_gen_mounting_check") { }
-
-    class spell_gen_mounting_check_AuraScript : public AuraScript
-    {
-        PrepareAuraScript(spell_gen_mounting_check_AuraScript)
-
-    public:
-        spell_gen_mounting_check_AuraScript() { }
-
-        void HandleEffectPeriodic(AuraEffect const * aurEff)
-        {
-            if (Unit* caster = GetCaster())
-            {
-                if (caster->GetOwner())
-                {
-                    if (caster->GetOwner()->IsMounted())
-                        caster->Mount(29736);
-                    else if (caster->IsMounted())
-                        caster->Unmount();
-                }
-            }
-        }
-
-        void Register()
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_gen_mounting_check_AuraScript::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-        }
-    };
-
-    AuraScript* GetAuraScript() const
-    {
-        return new spell_gen_mounting_check_AuraScript();
-    }
 };
 
 class spell_generic_clone : public SpellScriptLoader
@@ -1266,15 +1170,8 @@ class spell_gen_launch : public SpellScriptLoader
 
             void HandleScript(SpellEffIndex effIndex)
             {
-                PreventHitDefaultEffect(effIndex);
-
-                SpellEntry const* const spell = GetSpellInfo();
-
                 if (Player* player = GetHitPlayer())
-                {
-                    player->CastSpell(player,spell->EffectTriggerSpell[1],true); // changes the player's seat
                     player->AddAura(SPELL_LAUNCH_NO_FALLING_DAMAGE,player); // prevents falling damage
-                }
             }
 
             void Launch()
@@ -1380,9 +1277,7 @@ void AddSC_generic_spell_scripts()
     new spell_gen_parachute_ic();
     new spell_gen_gunship_portal();
     new spell_gen_dungeon_credit();
-    new spell_gen_venomhide_check();
     new spell_gen_profession_research();
-    new spell_gen_mounting_check();
     new spell_generic_clone();
     new spell_generic_clone_weapon();
     new spell_gen_seaforium_blast();

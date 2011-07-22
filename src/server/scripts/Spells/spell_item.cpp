@@ -222,13 +222,13 @@ public:
 
         void HandleDummy(SpellEffIndex /*effIndex*/)
         {
-            if (Unit* pTarget = GetHitUnit())
+            if (Unit* target = GetHitUnit())
             {
                 Unit* pCaster = GetCaster();
                 if (urand(0, 99) < 15)
                     pCaster->CastSpell(pCaster, SPELL_GNOMISH_DEATH_RAY_SELF, true, NULL);    // failure
                 else
-                    pCaster->CastSpell(pTarget, SPELL_GNOMISH_DEATH_RAY_TARGET, true, NULL);
+                    pCaster->CastSpell(target, SPELL_GNOMISH_DEATH_RAY_TARGET, true, NULL);
             }
         }
 
@@ -394,7 +394,7 @@ public:
 
         void HandleDummy(SpellEffIndex /*effIndex*/)
         {
-            if (Unit* pTarget = GetHitUnit())
+            if (Unit* target = GetHitUnit())
             {
                 uint32 spellId = SPELL_NET_O_MATIC_TRIGGERED3;
                 uint32 roll = urand(0, 99);
@@ -403,7 +403,7 @@ public:
                 else if (roll < 4)                       // 2% for 20 sec root, charge to target (off-like chance unknown)
                     spellId = SPELL_NET_O_MATIC_TRIGGERED2;
 
-                GetCaster()->CastSpell(pTarget, spellId, true, NULL);
+                GetCaster()->CastSpell(target, spellId, true, NULL);
             }
         }
 
@@ -572,7 +572,7 @@ public:
 
         void HandleDummy(SpellEffIndex /*effIndex*/)
         {
-            if (Unit* pTarget = GetHitUnit())
+            if (Unit* target = GetHitUnit())
             {
                 Unit* pCaster = GetCaster();
 
@@ -588,17 +588,17 @@ public:
                 {
                     spellId = SPELL_POLYMORPH;
                     if (urand(0, 100) <= 30)        // 30% chance to self-cast
-                        pTarget = pCaster;
+                        target = pCaster;
                 }
                 else if (rand < 95)                 // Enveloping Winds (15% chance)
                     spellId = SPELL_ENVELOPING_WINDS;
                 else                                // Summon Felhund minion (5% chance)
                 {
                     spellId = SPELL_SUMMON_FELHOUND_MINION;
-                    pTarget = pCaster;
+                    target = pCaster;
                 }
 
-                pCaster->CastSpell(pTarget, spellId, true, GetCastItem());
+                pCaster->CastSpell(target, spellId, true, GetCastItem());
             }
         }
 
@@ -728,7 +728,7 @@ public:
 
         void Register()
         {
-            AfterEffectApply += AuraEffectApplyFn(spell_item_shadowmourne_AuraScript::OnStackChange, EFFECT_0, SPELL_AURA_MOD_STAT, AURA_EFFECT_HANDLE_REAL);
+            AfterEffectApply += AuraEffectApplyFn(spell_item_shadowmourne_AuraScript::OnStackChange, EFFECT_0, SPELL_AURA_MOD_STAT, AuraEffectHandleModes(AURA_EFFECT_HANDLE_REAL | AURA_EFFECT_HANDLE_REAPPLY));
             AfterEffectRemove += AuraEffectRemoveFn(spell_item_shadowmourne_AuraScript::OnRemove, EFFECT_0, SPELL_AURA_MOD_STAT, AURA_EFFECT_HANDLE_REAL);
         }
     };
@@ -1077,6 +1077,7 @@ void AddSC_item_spell_scripts()
     new spell_item_trigger_spell("spell_item_mechanical_dragonling", SPELL_MECHANICAL_DRAGONLING);
     // 23075 Mithril Mechanical Dragonling
     new spell_item_trigger_spell("spell_item_mithril_mechanical_dragonling", SPELL_MITHRIL_MECHANICAL_DRAGONLING);
+
     new spell_item_deviate_fish();
     new spell_item_flask_of_the_north();
     new spell_item_gnomish_death_ray();
@@ -1089,6 +1090,7 @@ void AddSC_item_spell_scripts()
     new spell_item_underbelly_elixir();
     new spell_item_shadowmourne();
     new spell_item_red_rider_air_rifle();
+
     new spell_item_create_heart_candy();
     new spell_item_book_of_glyph_mastery();
     new spell_item_gift_of_the_harvester();

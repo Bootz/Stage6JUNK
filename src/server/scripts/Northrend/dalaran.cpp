@@ -48,56 +48,56 @@ public:
 
     struct npc_mageguard_dalaranAI : public Scripted_NoMovementAI
     {
-        npc_mageguard_dalaranAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature)
+        npc_mageguard_dalaranAI(Creature* creature) : Scripted_NoMovementAI(creature)
         {
-            pCreature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
-            pCreature->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_NORMAL, true);
-            pCreature->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_MASK_MAGIC, true);
+            creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+            creature->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_NORMAL, true);
+            creature->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_MASK_MAGIC, true);
         }
 
         void Reset(){}
 
-        void EnterCombat(Unit* /*pWho*/){}
+        void EnterCombat(Unit* /*who*/){}
 
-        void AttackStart(Unit* /*pWho*/){}
+        void AttackStart(Unit* /*who*/){}
 
-        void MoveInLineOfSight(Unit* pWho)
+        void MoveInLineOfSight(Unit* who)
         {
-            if (!pWho || !pWho->IsInWorld() || pWho->GetZoneId() != 4395)
+            if (!who || !who->IsInWorld() || who->GetZoneId() != 4395)
                 return;
 
-            if (!me->IsWithinDist(pWho, 65.0f, false))
+            if (!me->IsWithinDist(who, 65.0f, false))
                 return;
 
-            Player* pPlayer = pWho->GetCharmerOrOwnerPlayerOrPlayerItself();
+            Player* player = who->GetCharmerOrOwnerPlayerOrPlayerItself();
 
-            if (!pPlayer || pPlayer->isGameMaster() || pPlayer->IsBeingTeleported() || pWho->HasAura(70971) || pWho->HasAura(70972) || pWho->HasAura(70973) || pWho->HasAura(70974))
+            if (!player || player->isGameMaster() || player->IsBeingTeleported())
                 return;
 
             switch (me->GetEntry())
             {
                 case 29254:
-                    if (pPlayer->GetTeam() == HORDE)              // Horde unit found in Alliance area
+                    if (player->GetTeam() == HORDE)              // Horde unit found in Alliance area
                     {
                         if (GetClosestCreatureWithEntry(me, NPC_APPLEBOUGH_A, 32.0f))
                         {
-                            if (me->isInBackInMap(pWho, 12.0f))   // In my line of sight, "outdoors", and behind me
-                                DoCast(pWho, SPELL_TRESPASSER_A); // Teleport the Horde unit out
+                            if (me->isInBackInMap(who, 12.0f))   // In my line of sight, "outdoors", and behind me
+                                DoCast(who, SPELL_TRESPASSER_A); // Teleport the Horde unit out
                         }
                         else                                      // In my line of sight, and "indoors"
-                            DoCast(pWho, SPELL_TRESPASSER_A);     // Teleport the Horde unit out
+                            DoCast(who, SPELL_TRESPASSER_A);     // Teleport the Horde unit out
                     }
                     break;
                 case 29255:
-                    if (pPlayer->GetTeam() == ALLIANCE)           // Alliance unit found in Horde area
+                    if (player->GetTeam() == ALLIANCE)           // Alliance unit found in Horde area
                     {
                         if (GetClosestCreatureWithEntry(me, NPC_SWEETBERRY_H, 32.0f))
                         {
-                            if (me->isInBackInMap(pWho, 12.0f))   // In my line of sight, "outdoors", and behind me
-                                DoCast(pWho, SPELL_TRESPASSER_H); // Teleport the Alliance unit out
+                            if (me->isInBackInMap(who, 12.0f))   // In my line of sight, "outdoors", and behind me
+                                DoCast(who, SPELL_TRESPASSER_H); // Teleport the Alliance unit out
                         }
                         else                                      // In my line of sight, and "indoors"
-                            DoCast(pWho, SPELL_TRESPASSER_H);     // Teleport the Alliance unit out
+                            DoCast(who, SPELL_TRESPASSER_H);     // Teleport the Alliance unit out
                     }
                     break;
             }
@@ -130,144 +130,30 @@ class npc_hira_snowdawn : public CreatureScript
 public:
     npc_hira_snowdawn() : CreatureScript("npc_hira_snowdawn") { }
 
-    bool OnGossipHello(Player* pPlayer, Creature* pCreature)
+    bool OnGossipHello(Player* player, Creature* creature)
     {
-        if (!pCreature->isVendor() || !pCreature->isTrainer())
+        if (!creature->isVendor() || !creature->isTrainer())
             return false;
 
-        pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_VENDOR, GOSSIP_TEXT_TRAIN_HIRA, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRAIN);
+        player->ADD_GOSSIP_ITEM(GOSSIP_ICON_VENDOR, GOSSIP_TEXT_TRAIN_HIRA, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRAIN);
 
-        if (pPlayer->getLevel() >= 80 && pPlayer->HasSpell(SPELL_COLD_WEATHER_FLYING))
-            pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_VENDOR, GOSSIP_TEXT_BROWSE_GOODS, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRADE);
+        if (player->getLevel() >= 80 && player->HasSpell(SPELL_COLD_WEATHER_FLYING))
+            player->ADD_GOSSIP_ITEM(GOSSIP_ICON_VENDOR, GOSSIP_TEXT_BROWSE_GOODS, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRADE);
 
-        pPlayer->SEND_GOSSIP_MENU(pPlayer->GetGossipTextId(pCreature), pCreature->GetGUID());
+        player->SEND_GOSSIP_MENU(player->GetGossipTextId(creature), creature->GetGUID());
 
         return true;
     }
 
-    bool OnGossipSelect(Player* pPlayer, Creature* pCreature, uint32 /*uiSender*/, uint32 uiAction)
+    bool OnGossipSelect(Player* player, Creature* creature, uint32 /*uiSender*/, uint32 uiAction)
     {
-        pPlayer->PlayerTalkClass->ClearMenus();
+        player->PlayerTalkClass->ClearMenus();
         if (uiAction == GOSSIP_ACTION_TRAIN)
-            pPlayer->GetSession()->SendTrainerList(pCreature->GetGUID());
+            player->GetSession()->SendTrainerList(creature->GetGUID());
 
         if (uiAction == GOSSIP_ACTION_TRADE)
-            pPlayer->GetSession()->SendListInventory(pCreature->GetGUID());
+            player->GetSession()->SendListInventory(creature->GetGUID());
 
-        return true;
-    }
-};
-
-#define GOSSIP_TEXT_ARCANIST_TYBALIN "I'm ready to deliver the tome, Arcanist Tybalin"
-class npc_arcanist_tybalin : public CreatureScript
-{
-public:
-    npc_arcanist_tybalin() : CreatureScript("npc_arcanist_tybalin") { }
-
-    bool OnGossipHello(Player* pPlayer, Creature* pCreature)
-    {
-	     if (pCreature->isQuestGiver())
-            	pPlayer->PrepareQuestMenu(pCreature->GetGUID());
-
-	     if (pPlayer->GetQuestStatus(24451)!=QUEST_STATUS_NONE){
-		pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_TEXT_ARCANIST_TYBALIN, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRAIN);
-	}
-	pPlayer->TalkedToCreature(pCreature->GetEntry(), pCreature->GetGUID());
-	pPlayer->SEND_GOSSIP_MENU(pPlayer->GetGossipTextId(pCreature), pCreature->GetGUID());
-	
-        return true;
-    }
-
-    bool OnGossipSelect(Player* pPlayer, Creature* pCreature, uint32 /*uiSender*/, uint32 uiAction)
-    {
-        pPlayer->PlayerTalkClass->ClearMenus();
-        if (uiAction == GOSSIP_ACTION_TRAIN)
-            pPlayer->CastSpell(pPlayer, 69722, true);
-
-        return true;
-    }
-};
-
-#define GOSSIP_TEXT_MAGISTER_HATHOREL "I'm ready to deliver the tome, Magister Hathorel"
-class npc_magister_hathorel : public CreatureScript
-{
-public:
-    npc_magister_hathorel() : CreatureScript("npc_magister_hathorel") { }
-
-    bool OnGossipHello(Player* pPlayer, Creature* pCreature)
-    {
-	     if (pCreature->isQuestGiver())
-            	pPlayer->PrepareQuestMenu(pCreature->GetGUID());
-
-	     if (pPlayer->GetQuestStatus(20439)!=QUEST_STATUS_NONE){
-		pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_TEXT_MAGISTER_HATHOREL, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_TRAIN);
-	}
-	pPlayer->TalkedToCreature(pCreature->GetEntry(), pCreature->GetGUID());
-	pPlayer->SEND_GOSSIP_MENU(pPlayer->GetGossipTextId(pCreature), pCreature->GetGUID());
-	
-        return true;
-    }
-
-    bool OnGossipSelect(Player* pPlayer, Creature* pCreature, uint32 /*uiSender*/, uint32 uiAction)
-    {
-        pPlayer->PlayerTalkClass->ClearMenus();
-        if (uiAction == GOSSIP_ACTION_TRAIN)
-            pPlayer->CastSpell(pPlayer, 69722, true);
-
-        return true;
-    }
-};
-
-/*######
-## npc_archmage_vargoth http://www.wowhead.com/item=44738
-######*/
-
-enum eArchmageVargoth
-{
-    ZONE_DALARAN                                = 4395,
-    ITEM_ACANE_MAGIC_MASTERY                    = 43824,
-    SPELL_CREATE_FAMILAR                        = 61457,
-    SPELL_FAMILAR_PET                           = 61472,
-    ITEM_FAMILAR_PET                            = 44738
-};
-
-#define GOSSIP_TEXT_FAMILIAR_WELCOME "I have a book that might interest you. Would you like to take a look?"
-#define GOSSIP_TEXT_FAMILIAR_THANKS  "Thank you! I will be sure to notify you if I find anything else."
-
-class npc_archmage_vargoth : public CreatureScript
-{
-public:
-    npc_archmage_vargoth() : CreatureScript("npc_archmage_vargoth") { }
-
-    bool OnGossipHello (Player* pPlayer, Creature* pCreature)
-    {
-        if (pCreature->isQuestGiver() && pCreature->GetZoneId() != ZONE_DALARAN)
-            pPlayer->PrepareQuestMenu(pCreature->GetGUID());
-
-        if(pPlayer->HasItemCount(ITEM_ACANE_MAGIC_MASTERY,1,false))
-        {
-            if(!pPlayer->HasSpell(SPELL_FAMILAR_PET) && !pPlayer->HasItemCount(ITEM_FAMILAR_PET,1,true))
-                pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_TEXT_FAMILIAR_WELCOME, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
-        }
-        pPlayer->SEND_GOSSIP_MENU(pPlayer->GetGossipTextId(pCreature), pCreature->GetGUID());
-        return true;
-    }
-
-    bool OnGossipSelect (Player* pPlayer, Creature* pCreature, uint32 /*uiSender*/, uint32 uiAction)
-    {
-        pPlayer->PlayerTalkClass->ClearMenus();
-
-        switch (uiAction)
-        {
-            case GOSSIP_ACTION_INFO_DEF+1:
-                pPlayer->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_TEXT_FAMILIAR_THANKS, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+2);
-                pPlayer->SEND_GOSSIP_MENU(40000, pCreature->GetGUID());
-                break;
-            case GOSSIP_ACTION_INFO_DEF+2:
-                pCreature->CastSpell(pPlayer,SPELL_CREATE_FAMILAR,false);
-                pPlayer->CLOSE_GOSSIP_MENU();
-                break;
-        }
         return true;
     }
 };
@@ -276,7 +162,4 @@ void AddSC_dalaran()
 {
     new npc_mageguard_dalaran;
     new npc_hira_snowdawn;
-    new npc_arcanist_tybalin;
-    new npc_magister_hathorel;
-    new npc_archmage_vargoth;
 }

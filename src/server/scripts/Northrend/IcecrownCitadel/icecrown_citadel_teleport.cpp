@@ -43,8 +43,6 @@ class icecrown_citadel_teleport : public GameObjectScript
                     player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Teleport to the Upper Spire.", GOSSIP_SENDER_ICC_PORT, UPPER_SPIRE_TELEPORT);
                 if (instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) == DONE)
                     player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Teleport to Sindragosa's Lair", GOSSIP_SENDER_ICC_PORT, SINDRAGOSA_S_LAIR_TELEPORT);
-                if (instance->GetBossState(DATA_PROFESSOR_PUTRICIDE) == DONE && instance->GetBossState(DATA_BLOOD_QUEEN_LANA_THEL) == DONE && instance->GetBossState(DATA_SINDRAGOSA) == DONE)
-                    player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, "Teleport to The Frozen Throne", GOSSIP_SENDER_ICC_PORT, FROZEN_THRONE_TELEPORT);
             }
 
             player->SEND_GOSSIP_MENU(player->GetGossipTextId(go->GetGOInfo()->GetGossipMenuId()), go->GetGUID());
@@ -66,17 +64,22 @@ class icecrown_citadel_teleport : public GameObjectScript
             }
 
             if (sender == GOSSIP_SENDER_ICC_PORT)
-            {
-                //Preload the Lich King's platform before teleporting player to there
-                if (action == FROZEN_THRONE_TELEPORT)
-                    player->GetMap()->LoadGrid(530.3f, -2122.67f);
-
                 player->CastSpell(player, spell, true);
 
-                //Give him 2 tries after teleport, just in case if player will fall through the ground
-                if (action == FROZEN_THRONE_TELEPORT)
-                    TeleportPlayerToFrozenThrone(player);
-            }
+            return true;
+        }
+};
+
+class at_frozen_throne_teleport : public AreaTriggerScript
+{
+    public:
+        at_frozen_throne_teleport() : AreaTriggerScript("at_frozen_throne_teleport") { }
+
+        bool OnTrigger(Player* player, AreaTriggerEntry const* /*areaTrigger*/)
+        {
+            if (InstanceScript* instance = player->GetInstanceScript())
+                if (instance->GetBossState(DATA_PROFESSOR_PUTRICIDE) == DONE && instance->GetBossState(DATA_BLOOD_QUEEN_LANA_THEL) == DONE && instance->GetBossState(DATA_SINDRAGOSA) == DONE)
+                    player->CastSpell(player, FROZEN_THRONE_TELEPORT, true);
 
             return true;
         }
@@ -85,4 +88,5 @@ class icecrown_citadel_teleport : public GameObjectScript
 void AddSC_icecrown_citadel_teleport()
 {
     new icecrown_citadel_teleport();
+    new at_frozen_throne_teleport();
 }
