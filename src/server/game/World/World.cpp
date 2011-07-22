@@ -74,6 +74,7 @@
 #include "CreatureTextMgr.h"
 #include "SmartAI.h"
 #include "Channel.h"
+#include "WardenMgr.h"
 
 volatile bool World::m_stopEvent = false;
 uint8 World::m_ExitCode = SHUTDOWN_EXIT_CODE;
@@ -1183,6 +1184,9 @@ void World::LoadConfigSettings(bool reload)
     // MySQL ping time interval
     m_int_configs[CONFIG_DB_PING_INTERVAL] = sConfig->GetIntDefault("MaxPingTime", 30);
 
+    // Warden ban time
+    m_bool_configs[CONFIG_UINT32_WARDEN_BAN_TIME] = sConfig->GetBoolDefault("Wardend.BanLength", 1);	
+
     sScriptMgr->OnConfigLoad(reload);
 }
 
@@ -1674,6 +1678,21 @@ void World::SetInitialWorldSettings()
     uint32 nextGameEvent = sGameEventMgr->StartSystem();
     m_timers[WUPDATE_EVENTS].SetInterval(nextGameEvent);    //depend on next event
 
+    if (sConfig->GetBoolDefault("wardend.enable", true))
+    {
+        sLog->outString("Starting Warden system...");
+        sWardenMgr->Initialize(sConfig->GetStringDefault("wardend.address","127.0.0.1").c_str(),
+        sConfig->GetIntDefault("wardend.port", 6555),
+        sConfig->GetBoolDefault("wardend.ban", false));
+        m_timers[WUPDATE_WARDEN].SetInterval(1 * IN_MILLISECONDS);
+    }
+    else
+    {
+        sLog->outString("Warden system disabled, skipping");
+        sWardenMgr->SetDisabled();
+    }
+
+
     // Delete all characters which have been deleted X days before
     Player::DeleteOldCharacters();
 
@@ -1947,6 +1966,18 @@ void World::Update(uint32 diff)
     sOutdoorPvPMgr->Update(diff);
     RecordTimeDiff("UpdateOutdoorPvPMgr");
 
+    ///- <li> Handle warden manager update
+    if (m_timers[WUPDATE_WARDEN].Passed())
+    {
+        ///- Update WardenTimer in all sessions
+        for (SessionMap::iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
+            itr->second->UpdateWardenTimer(m_timers[WUPDATE_WARDEN].GetCurrent());
+
+        ///- Then call the update method of WardenMgr Singleton
+        sWardenMgr->Update(m_timers[WUPDATE_WARDEN].GetCurrent());
+        m_timers[WUPDATE_WARDEN].SetCurrent(0);
+    }
+
     ///- Delete all characters which have been deleted X days before
     if (m_timers[WUPDATE_DELETECHARS].Passed())
     {
@@ -2198,6 +2229,18 @@ void World::KickAllLess(AccountTypes sec)
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
         if (itr->second->GetSecurity() < sec)
             itr->second->KickPlayer();
+}
+
+BanReturn World::BanAccount(WorldSession *session, uint32 duration_secs, std::string reason, std::string author)
+{
+    LoginDatabase.PExecute("INSERT INTO account_banned VALUES ('%u', '%u', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+%u, '%s', '%s', '1')",
+    session->GetAccountId(),
+    sConfig->GetIntDefault("RealmID", 0),
+    duration_secs,
+    author.c_str(),
+    reason.c_str());
+    session->KickPlayer();
+    return BAN_SUCCESS;
 }
 
 /// Ban an account or ban an IP address, duration will be parsed using TimeStringToSecs if it is positive, otherwise permban

@@ -29,6 +29,7 @@
 #include "DatabaseEnv.h"
 #include "World.h"
 #include "WorldPacket.h"
+#include "Timer.h"
 
 struct ItemTemplate;
 struct AuctionEntry;
@@ -213,6 +214,7 @@ class CharacterCreateInfo
 /// Player session in the World
 class WorldSession
 {
+    friend class WardenMgr;    
     public:
         WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter);
         ~WorldSession();
@@ -391,6 +393,11 @@ class WorldSession
         // Recruit-A-Friend Handling
         uint32 GetRecruiterId() { return recruiterId; }
 
+        uint8 *GetWardenServerKey() { return &m_rc4ServerKey[0]; }
+        uint8 *GetWardenSeed() { return &m_wardenSeed[0]; }
+        uint8 *GetWardenTempClientKey() { return &m_WardenTmpClientKey[0]; }
+        void UpdateWardenTimer(uint32 diff) { m_WardenTimer.Update(diff); }
+		
     public:                                                 // opcodes handlers
 
         void Handle_NULL(WorldPacket& recvPacket);          // not used
@@ -768,7 +775,11 @@ class WorldSession
         void HandleBattlemasterJoinArena(WorldPacket &recv_data);
         void HandleReportPvPAFK(WorldPacket &recv_data);
 
+        //Warden
         void HandleWardenDataOpcode(WorldPacket& recv_data);
+        void HandleWardenRegister();                        // for internal call
+        void HandleWardenUnregister();                      // for internal call
+        
         void HandleWorldTeleportOpcode(WorldPacket& recv_data);
         void HandleMinimapPingOpcode(WorldPacket& recv_data);
         void HandleRandomRollOpcode(WorldPacket& recv_data);
@@ -950,6 +961,15 @@ class WorldSession
         AddonsList m_addonsList;
         uint32 recruiterId;
         ACE_Based::LockedQueue<WorldPacket*, ACE_Thread_Mutex> _recvQueue;
+
+        uint8 m_wardenStatus;
+        uint8 m_rc4ServerKey[0x102];
+        uint8 m_rc4ClientKey[0x102];
+        uint8 m_wardenSeed[16];
+        IntervalTimer m_WardenTimer;
+        std::string m_WardenModule;
+        void *m_WardenClientChecks;
+        uint8 m_WardenTmpClientKey[0x102];
 };
 #endif
 /// @}
