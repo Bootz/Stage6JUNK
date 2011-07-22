@@ -43,7 +43,6 @@ public:
             { "unload",         SEC_GAMEMASTER,     false, &HandleWpUnLoadCommand,             "", NULL },
             { "reload",         SEC_ADMINISTRATOR,  false, &HandleWpReloadCommand,             "", NULL },
             { "show",           SEC_GAMEMASTER,     false, &HandleWpShowCommand,               "", NULL },
-            { "get",            SEC_GAMEMASTER,     false, &HandleWpGetCommand,                "", NULL },
             { NULL,             0,                  false, NULL,                               "", NULL }
         };
         static ChatCommand commandTable[] =
@@ -198,7 +197,6 @@ public:
         sWaypointMgr->ReloadPath(id);
         return true;
     }
-    
     static bool HandleWpUnLoadCommand(ChatHandler* handler, const char* /*args*/)
     {
         uint32 guidlow = 0;
@@ -742,9 +740,9 @@ public:
                 {
                     Field *fields = result2->Fetch();
                     uint32 wpguid = fields[0].GetUInt32();
-                    Creature* pCreature = handler->GetSession()->GetPlayer()->GetMap()->GetCreature(MAKE_NEW_GUID(wpguid, VISUAL_WAYPOINT, HIGHGUID_UNIT));
+                    Creature* creature = handler->GetSession()->GetPlayer()->GetMap()->GetCreature(MAKE_NEW_GUID(wpguid, VISUAL_WAYPOINT, HIGHGUID_UNIT));
 
-                    if (!pCreature)
+                    if (!creature)
                     {
                         handler->PSendSysMessage(LANG_WAYPOINT_NOTREMOVED, wpguid);
                         hasError = true;
@@ -752,9 +750,9 @@ public:
                     }
                     else
                     {
-                        pCreature->CombatStop();
-                        pCreature->DeleteFromDB();
-                        pCreature->AddObjectToRemoveList();
+                        creature->CombatStop();
+                        creature->DeleteFromDB();
+                        creature->AddObjectToRemoveList();
                     }
 
                 }
@@ -833,22 +831,22 @@ public:
             float o = chr->GetOrientation();
             Map *map = chr->GetMap();
 
-            Creature* pCreature = new Creature;
-            if (!pCreature->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_UNIT), map, chr->GetPhaseMaskForSpawn(), id, 0, 0, x, y, z, o))
+            Creature* creature = new Creature;
+            if (!creature->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_UNIT), map, chr->GetPhaseMaskForSpawn(), id, 0, 0, x, y, z, o))
             {
                 handler->PSendSysMessage(LANG_WAYPOINT_VP_NOTCREATED, id);
-                delete pCreature;
+                delete creature;
                 return false;
             }
 
-            pCreature->SaveToDB(map->GetId(), (1 << map->GetSpawnMode()), chr->GetPhaseMaskForSpawn());
-            pCreature->LoadFromDB(pCreature->GetDBTableGUIDLow(), map);
-            map->Add(pCreature);
+            creature->SaveToDB(map->GetId(), (1 << map->GetSpawnMode()), chr->GetPhaseMaskForSpawn());
+            creature->LoadFromDB(creature->GetDBTableGUIDLow(), map);
+            map->Add(creature);
 
             if (target)
             {
-                pCreature->SetDisplayId(target->GetDisplayId());
-                pCreature->SetFloatValue(OBJECT_FIELD_SCALE_X, 0.5);
+                creature->SetDisplayId(target->GetDisplayId());
+                creature->SetFloatValue(OBJECT_FIELD_SCALE_X, 0.5);
             }
 
             return true;
@@ -881,22 +879,22 @@ public:
             float o = chr->GetOrientation();
             Map *map = chr->GetMap();
 
-            Creature* pCreature = new Creature;
-            if (!pCreature->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_UNIT), map, chr->GetPhaseMaskForSpawn(), id, 0, 0, x, y, z, o))
+            Creature* creature = new Creature;
+            if (!creature->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_UNIT), map, chr->GetPhaseMaskForSpawn(), id, 0, 0, x, y, z, o))
             {
                 handler->PSendSysMessage(LANG_WAYPOINT_NOTCREATED, id);
-                delete pCreature;
+                delete creature;
                 return false;
             }
 
-            pCreature->SaveToDB(map->GetId(), (1 << map->GetSpawnMode()), chr->GetPhaseMaskForSpawn());
-            pCreature->LoadFromDB(pCreature->GetDBTableGUIDLow(), map);
-            map->Add(pCreature);
+            creature->SaveToDB(map->GetId(), (1 << map->GetSpawnMode()), chr->GetPhaseMaskForSpawn());
+            creature->LoadFromDB(creature->GetDBTableGUIDLow(), map);
+            map->Add(creature);
 
             if (target)
             {
-                pCreature->SetDisplayId(target->GetDisplayId());
-                pCreature->SetFloatValue(OBJECT_FIELD_SCALE_X, 0.5);
+                creature->SetDisplayId(target->GetDisplayId());
+                creature->SetFloatValue(OBJECT_FIELD_SCALE_X, 0.5);
             }
 
             return true;
@@ -916,8 +914,8 @@ public:
             {
                 Field *fields = result->Fetch();
                 uint32 guid = fields[0].GetUInt32();
-                Creature* pCreature = handler->GetSession()->GetPlayer()->GetMap()->GetCreature(MAKE_NEW_GUID(guid, VISUAL_WAYPOINT, HIGHGUID_UNIT));
-                if (!pCreature)
+                Creature* creature = handler->GetSession()->GetPlayer()->GetMap()->GetCreature(MAKE_NEW_GUID(guid, VISUAL_WAYPOINT, HIGHGUID_UNIT));
+                if (!creature)
                 {
                     handler->PSendSysMessage(LANG_WAYPOINT_NOTREMOVED, guid);
                     hasError = true;
@@ -925,9 +923,9 @@ public:
                 }
                 else
                 {
-                    pCreature->CombatStop();
-                    pCreature->DeleteFromDB();
-                    pCreature->AddObjectToRemoveList();
+                    creature->CombatStop();
+                    creature->DeleteFromDB();
+                    creature->AddObjectToRemoveList();
                 }
             }
             while (result->NextRow());
@@ -948,20 +946,6 @@ public:
 
         handler->PSendSysMessage("|cffff33ffDEBUG: wpshow - no valid command found|r");
         return true;
-    }
-
-    static bool HandleWpGetCommand(ChatHandler* handler, const char* args)
-    {
-        if (!*args)
-            return false;
-
-        float x,y,z;
-
-        Player* Pl = handler->GetSession()->GetPlayer();
-        Pl->GetPosition(x,y,z);
-        sLog->outString("AddWaypoint(, %ff, %ff, %ff);",x,y,z);
-        Pl->SummonGameObject(188650, x, y, z,0,0,0,0,0,0);
-        return false;
     }
 };
 

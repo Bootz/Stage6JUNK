@@ -143,9 +143,6 @@ void WorldSession::HandleGossipSelectOptionOpcode(WorldPacket & recv_data)
         {
             go->AI()->GossipSelectCode(_player, menuId, gossipListId, code.c_str());
             sScriptMgr->OnGossipSelectCode(_player, go, _player->PlayerTalkClass->GetGossipOptionSender(gossipListId), _player->PlayerTalkClass->GetGossipOptionAction(gossipListId), code.c_str());
-            //Allow GO use gossip_scripts
-            if (!sScriptMgr->OnGossipSelectCode(_player, go, _player->PlayerTalkClass->GetGossipOptionSender(gossipListId), _player->PlayerTalkClass->GetGossipOptionAction(gossipListId), code.c_str()))
-                _player->OnGossipSelect(go, gossipListId, menuId);
         }
     }
     else
@@ -160,9 +157,6 @@ void WorldSession::HandleGossipSelectOptionOpcode(WorldPacket & recv_data)
         {
             go->AI()->GossipSelect(_player, menuId, gossipListId);
             sScriptMgr->OnGossipSelect(_player, go, _player->PlayerTalkClass->GetGossipOptionSender(gossipListId), _player->PlayerTalkClass->GetGossipOptionAction(gossipListId));
-            //Allow GO use gossip_scripts
-            if (!sScriptMgr->OnGossipSelect(_player, go, _player->PlayerTalkClass->GetGossipOptionSender(gossipListId), _player->PlayerTalkClass->GetGossipOptionAction(gossipListId)))
-                _player->OnGossipSelect(go, gossipListId, menuId);
         }
     }
 }
@@ -493,22 +487,6 @@ void WorldSession::HandleZoneUpdateOpcode(WorldPacket & recv_data)
     GetPlayer()->GetZoneAndAreaId(newzone, newarea);
     GetPlayer()->UpdateZone(newzone, newarea);
     //GetPlayer()->SendInitWorldStates(true, newZone);
-}
-
-void WorldSession::HandleSetTargetOpcode(WorldPacket & recv_data)
-{
-    uint64 guid;
-    recv_data >> guid;
-
-    _player->SetUInt32Value(UNIT_FIELD_TARGET, uint32(guid));
-
-    // update reputation list if need
-    Unit* unit = ObjectAccessor::GetUnit(*_player, guid);
-    if (!unit)
-        return;
-
-    if (FactionTemplateEntry const* factionTemplateEntry = sFactionTemplateStore.LookupEntry(unit->getFaction()))
-        _player->GetReputationMgr().SetVisible(factionTemplateEntry);
 }
 
 void WorldSession::HandleSetSelectionOpcode(WorldPacket & recv_data)
@@ -1445,7 +1423,7 @@ void WorldSession::HandleFarSightOpcode(WorldPacket & recv_data)
             if (WorldObject *target = _player->GetViewpoint())
                 _player->SetSeer(target);
             else
-                sLog->outError("Player %s requests non-existing seer", _player->GetName());
+                sLog->outError("Player %s requests non-existing seer " UI64FMTD, _player->GetName(), _player->GetUInt64Value(PLAYER_FARSIGHT));
             break;
         default:
             sLog->outDebug(LOG_FILTER_NETWORKIO, "Unhandled mode in CMSG_FAR_SIGHT: %u", apply);
@@ -1537,9 +1515,6 @@ void WorldSession::HandleSetDungeonDifficultyOpcode(WorldPacket & recv_data)
         return;
     }
 
-    if (_player->getLevel() < LEVELREQUIREMENT_HEROIC)
-        return;
-
     Group *pGroup = _player->GetGroup();
     if (pGroup)
     {
@@ -1596,9 +1571,6 @@ void WorldSession::HandleSetRaidDifficultyOpcode(WorldPacket & recv_data)
     }
 
     if (Difficulty(mode) == _player->GetRaidDifficulty())
-        return;
-
-    if (_player->getLevel() < LEVELREQUIREMENT_HEROIC)
         return;
 
     Group *pGroup = _player->GetGroup();

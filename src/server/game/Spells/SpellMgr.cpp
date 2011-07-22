@@ -28,8 +28,6 @@
 #include "CreatureAI.h"
 #include "MapManager.h"
 #include "BattlegroundIC.h"
-#include "OutdoorPvPMgr.h"
-#include "OutdoorPvPWG.h"
 
 bool IsAreaEffectTarget[TOTAL_SPELL_TARGETS];
 SpellEffectTargetTypes EffectTargetType[TOTAL_SPELL_EFFECTS];
@@ -129,8 +127,9 @@ SpellMgr::SpellMgr()
             case TARGET_UNIT_TARGET_ANY:
             case TARGET_UNIT_TARGET_ENEMY:
             case TARGET_UNIT_TARGET_PARTY:
-            case TARGET_UNIT_PARTY_TARGET:
-            case TARGET_UNIT_CLASS_TARGET:
+            case TARGET_UNIT_TARGET_PASSENGER:
+            case TARGET_UNIT_TARGET_ALLY_PARTY:
+            case TARGET_UNIT_TARGET_CLASS_RAID:
             case TARGET_UNIT_CHAINHEAL:
                 SpellTargetType[i] = TARGET_TYPE_UNIT_TARGET;
                 break;
@@ -238,7 +237,7 @@ SpellMgr::SpellMgr()
             case TARGET_UNIT_AREA_ENTRY_SRC:
             case TARGET_UNIT_AREA_PARTY_DST:
             case TARGET_UNIT_AREA_PARTY_SRC:
-            case TARGET_UNIT_PARTY_TARGET:
+            case TARGET_UNIT_TARGET_ALLY_PARTY:
             case TARGET_UNIT_PARTY_CASTER:
             case TARGET_UNIT_CONE_ENEMY:
             case TARGET_UNIT_CONE_ALLY:
@@ -791,11 +790,6 @@ bool SpellMgr::_isPositiveEffect(uint32 spellId, uint32 effIndex, bool deep) con
             if (spellproto->SpellIconID == 45)
                 return true;
             break;
-        case SPELLFAMILY_WARRIOR:
-	     // Shockwave
-            if (spellId == 46968)
-                return false;
-            break;
         case SPELLFAMILY_PRIEST:
             switch (spellId)
             {
@@ -992,10 +986,6 @@ bool SpellMgr::_isPositiveEffect(uint32 spellId, uint32 effIndex, bool deep) con
 
     // non-positive targets
     if (!IsPositiveTarget(spellproto->EffectImplicitTargetA[effIndex], spellproto->EffectImplicitTargetB[effIndex]))
-        return false;
-
-    // AttributesEx check
-    if (spellproto->AttributesEx & SPELL_ATTR1_NEGATIVE)
         return false;
 
     if (!deep && spellproto->EffectTriggerSpell[effIndex]
@@ -1534,7 +1524,8 @@ void SpellMgr::LoadSpellProcs()
         baseProcEntry.attributesMask  = fields[10].GetUInt32();
         baseProcEntry.ratePerMinute   = fields[11].GetFloat();
         baseProcEntry.chance          = fields[12].GetFloat();
-        baseProcEntry.cooldown        = fields[13].GetFloat();
+        float cooldown                = fields[13].GetFloat();
+        baseProcEntry.cooldown        = uint32(cooldown);
         baseProcEntry.charges         = fields[14].GetUInt32();
 
         while(true)
@@ -1569,7 +1560,7 @@ void SpellMgr::LoadSpellProcs()
                 sLog->outErrorDb("`spell_proc` table entry for spellId %u has negative value in `ratePerMinute` field", spellId);
                 procEntry.ratePerMinute = 0;
             }
-            if (procEntry.cooldown < 0)
+            if (cooldown < 0)
             {
                 sLog->outErrorDb("`spell_proc` table entry for spellId %u has negative value in `cooldown` field", spellId);
                 procEntry.cooldown = 0;
@@ -1585,7 +1576,7 @@ void SpellMgr::LoadSpellProcs()
                 sLog->outErrorDb("`spell_proc` table entry for spellId %u doesn't have `typeMask` value defined, proc will not be triggered", spellId);
             if (procEntry.spellTypeMask & ~PROC_SPELL_PHASE_MASK_ALL)
                 sLog->outErrorDb("`spell_proc` table entry for spellId %u has wrong `spellTypeMask` set: %u", spellId, procEntry.spellTypeMask);
-            if (procEntry.spellTypeMask && !(procEntry.typeMask & SPELL_PROC_FLAG_MASK))
+            if (procEntry.spellTypeMask && !(procEntry.typeMask & (SPELL_PROC_FLAG_MASK | PERIODIC_PROC_FLAG_MASK)))
                 sLog->outErrorDb("`spell_proc` table entry for spellId %u has `spellTypeMask` value defined, but it won't be used for defined `typeMask` value", spellId);
             if (!procEntry.spellPhaseMask && procEntry.typeMask & REQ_SPELL_PHASE_PROC_FLAG_MASK)
                 sLog->outErrorDb("`spell_proc` table entry for spellId %u doesn't have `spellPhaseMask` value defined, but it's required for defined `typeMask` value, proc will not be triggered", spellId);
@@ -1613,6 +1604,71 @@ void SpellMgr::LoadSpellProcs()
 
     sLog->outString(">> Loaded %u spell proc conditions and data in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
     sLog->outString();
+}
+
+bool SpellMgr::CanSpellTriggerProcOnEvent(SpellProcEntry const& procEntry, ProcEventInfo& eventInfo)
+{
+    // proc type doesn't match
+    if (!(eventInfo.GetTypeMask() & procEntry.typeMask))
+        return false;
+
+    // check XP or honor target requirement
+    if (procEntry.attributesMask & PROC_ATTR_REQ_EXP_OR_HONOR)
+        if (Player* actor = eventInfo.GetActor()->ToPlayer())
+            if (eventInfo.GetActionTarget() && !actor->isHonorOrXPTarget(eventInfo.GetActionTarget()))
+                return false;
+
+    // always trigger for these types
+    if (eventInfo.GetTypeMask() & (PROC_FLAG_KILLED | PROC_FLAG_KILL | PROC_FLAG_DEATH))
+        return true;
+
+    // check school mask (if set) for other trigger types
+    if (procEntry.schoolMask && !(eventInfo.GetSchoolMask() & procEntry.schoolMask))
+        return false;
+
+    // check spell family name/flags (if set) for spells
+    if (eventInfo.GetTypeMask() & (PERIODIC_PROC_FLAG_MASK | SPELL_PROC_FLAG_MASK | PROC_FLAG_DONE_TRAP_ACTIVATION))
+    {
+        if (procEntry.spellFamilyName && (procEntry.spellFamilyName != eventInfo.GetSpellInfo()->SpellFamilyName))
+            return false;
+
+        if (procEntry.spellFamilyMask && !(procEntry.spellFamilyMask & eventInfo.GetSpellInfo()->SpellFamilyFlags))
+            return false;
+    }
+
+    // check spell type mask (if set)
+    if (eventInfo.GetTypeMask() & (SPELL_PROC_FLAG_MASK | PERIODIC_PROC_FLAG_MASK))
+    {
+        if (procEntry.spellTypeMask && !(eventInfo.GetSpellTypeMask() & procEntry.spellTypeMask))
+            return false;
+    }
+
+    // check spell phase mask
+    if (eventInfo.GetTypeMask() & REQ_SPELL_PHASE_PROC_FLAG_MASK)
+    {
+        if (!(eventInfo.GetSpellPhaseMask() & procEntry.spellPhaseMask))
+            return false;
+    }
+
+    // check hit mask (on taken hit or on done hit, but not on spell cast phase)
+    if ((eventInfo.GetTypeMask() & TAKEN_HIT_PROC_FLAG_MASK) || ((eventInfo.GetTypeMask() & DONE_HIT_PROC_FLAG_MASK) && !(eventInfo.GetSpellPhaseMask() & PROC_SPELL_PHASE_CAST)))
+    {
+        uint32 hitMask = procEntry.hitMask;
+        // get default values if hit mask not set
+        if (!hitMask)
+        {
+            // for taken procs allow normal + critical hits by default
+            if (eventInfo.GetTypeMask() & TAKEN_HIT_PROC_FLAG_MASK)
+                hitMask |= PROC_HIT_NORMAL | PROC_HIT_CRITICAL;
+            // for done procs allow normal + critical + absorbs by default
+            else
+                hitMask |= PROC_HIT_NORMAL | PROC_HIT_CRITICAL | PROC_HIT_ABSORB;
+        }
+        if (!(eventInfo.GetHitMask() & hitMask))
+            return false;
+    }
+
+    return true;
 }
 
 void SpellMgr::LoadSpellBonusess()
@@ -3285,26 +3341,6 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
                 return false;
             break;
         }
-        case 58730: // No fly Zone - Wintergrasp
-            {
-                if (!player)
-                    return false;
-
-                if (sWorld->getBoolConfig(CONFIG_OUTDOORPVP_WINTERGRASP_ENABLED))
-                {
-                    OutdoorPvPWG *pvpWG = (OutdoorPvPWG*)sOutdoorPvPMgr->GetOutdoorPvPToZoneId(4197);
-                    if ((pvpWG->isWarTime()==false) || player->isDead() || (!player->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED) && !player->HasAuraType(SPELL_AURA_FLY)) || player->HasAura(45472) || player->HasAura(44795) || player->GetPositionZ() > 619.2f || player->isInFlight())
-                        return false;
-                }
-                break;
-            }
-        case 58045: // Essence of Wintergrasp - Wintergrasp
-        case 57940: // Essence of Wintergrasp - Northrend
-            {
-                if (!player || player->GetTeamId() != sWorld->getWorldState(WORLDSTATE_WINTERGRASP_CONTROLING_FACTION))
-                    return false;
-                break;
-            }
         case 68719: // Oil Refinery - Isle of Conquest.
         case 68720: // Quarry - Isle of Conquest.
         {
@@ -3350,8 +3386,7 @@ bool SpellMgr::CanAurasStack(Aura const *aura1, Aura const *aura2, bool sameCast
 
     if (!sameCaster)
     {
-        if (spellInfo_1->AttributesEx & SPELL_ATTR1_STACK_FOR_DIFF_CASTERS
-            || spellInfo_1->AttributesEx3 & SPELL_ATTR3_STACK_FOR_DIFF_CASTERS)
+        if (spellInfo_1->AttributesEx3 & SPELL_ATTR3_STACK_FOR_DIFF_CASTERS)
             return true;
 
         // check same periodic auras
@@ -3812,8 +3847,55 @@ void SpellMgr::LoadSpellCustomAttr()
             ++count;
         }
 
+        // TODO: this REALLY needs to be moved to db (so it can be blamed on db guys)
         switch (i)
         {
+        case 1776: // Gouge
+        case 1777:
+        case 8629:
+        case 11285:
+        case 11286:
+        case 12540:
+        case 13579:
+        case 24698:
+        case 28456:
+        case 29425:
+        case 34940:
+        case 36862:
+        case 38764:
+        case 38863:
+        case 52743: // Head Smack
+            mSpellCustomAttr[i] |= SPELL_ATTR0_CU_REQ_TARGET_FACING_CASTER;
+            ++count;
+            break;
+        case 53: // Backstab
+        case 2589:
+        case 2590:
+        case 2591:
+        case 8721:
+        case 11279:
+        case 11280:
+        case 11281:
+        case 25300:
+        case 26863:
+        case 48656:
+        case 48657:
+        case 5221: // Shred
+        case 6800:
+        case 8992:
+        case 9829:
+        case 9830:
+        case 27001:
+        case 27002:
+        case 48571:
+        case 48572:
+        case 21987: // Lash of Pain
+        case 23959: // Test Stab R50
+        case 24825: // Test Backstab
+        case 58563: // Assassinate Restless Lookout
+            mSpellCustomAttr[i] |= SPELL_ATTR0_CU_REQ_CASTER_BEHIND_TARGET;
+            ++count;
+            break;
         case 36350: //They Must Burn Bomb Aura (self)
             spellInfo->EffectTriggerSpell[0] = 36325; // They Must Burn Bomb Drop (DND)
             ++count;
@@ -3839,12 +3921,6 @@ void SpellMgr::LoadSpellCustomAttr()
             spellInfo->EffectImplicitTargetA[1] = TARGET_UNIT_TARGET_ENEMY;
             ++count;
             break;
-        // Chains of Ice
-        case 45524:
-            // this will fix self-damage caused by Glyph of Chains of Ice
-            spellInfo->EffectImplicitTargetA[2] = TARGET_UNIT_TARGET_ENEMY;
-            ++count;
-            break;
         case 8494: // Mana Shield (rank 2)
             // because of bug in dbc
             spellInfo->procChance = 0;
@@ -3858,31 +3934,23 @@ void SpellMgr::LoadSpellCustomAttr()
             spellInfo->excludeCasterAuraSpell = 57724; // Sated
             ++count;
             break;
-        // Fiery Payback hack
-        case 44440:
-        case 44441:
-            spellInfo->CasterAuraStateNot = AURA_STATE_NONE;
-            ++count;
-            break;
         case 20335: // Heart of the Crusader
         case 20336:
         case 20337:
         case 63320: // Glyph of Life Tap
         // Entries were not updated after spell effect change, we have to do that manually :/
-            spellInfo->AttributesEx3 |= SPELL_ATTR3_CAN_PROC_TRIGGERED;
+            spellInfo->AttributesEx3 |= SPELL_ATTR3_CAN_PROC_WITH_TRIGGERED;
+            ++count;
+            break;
+        case 31117: // Unstable Affliction
+            // this attribute currently makes spell to ignore resilience and absorbs
+            spellInfo->AttributesEx4 &= ~SPELL_ATTR4_FIXED_DAMAGE;
             ++count;
             break;
         case 16007: // Draco-Incarcinatrix 900
             // was 46, but effect is aura effect
             spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_NEARBY_ENTRY;
             spellInfo->EffectImplicitTargetB[0] = TARGET_DST_NEARBY_ENTRY;
-            ++count;
-            break;
-        case 24131:                             // Wyvern Sting (rank 1)
-        case 24134:                             // Wyvern Sting (rank 2)
-        case 24135:                             // Wyvern Sting (rank 3)
-            // something wrong and it applied as positive buff
-            mSpellCustomAttr[i] |= SPELL_ATTR0_CU_NEGATIVE_EFF0;
             ++count;
             break;
         case 26029: // Dark Glare
@@ -3923,25 +3991,6 @@ void SpellMgr::LoadSpellCustomAttr()
             // Target entry seems to be wrong for this spell :/
             spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_PARTY_CASTER;
             spellInfo->EffectRadiusIndex[0] = 45;
-            ++count;
-            break;
-        case 63944:                             // Renewed Hope hack
-            spellInfo->EffectApplyAuraName[0] = 87;
-            spellInfo->EffectMiscValue[0] = 127;
-            ++count;
-            break;
-        case 71189: // Dreamwalker's Rage
-            spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_CASTER;
-            spellInfo->EffectImplicitTargetB[0] = TARGET_UNIT_AREA_ENEMY_SRC;
-            spellInfo->EffectRadiusIndex[0] = 12;
-            ++count;
-            break;
-        case 70127: // Mystic Buffet
-        case 72528:
-        case 72529:
-        case 72530:
-            spellInfo->EffectImplicitTargetA[1] = TARGET_SRC_CASTER;
-            spellInfo->EffectImplicitTargetB[1] = TARGET_UNIT_AREA_ENEMY_SRC;
             ++count;
             break;
         case 27820: // Mana Detonation
@@ -3998,13 +4047,10 @@ void SpellMgr::LoadSpellCustomAttr()
         case 54172: // Divine Storm (heal)
         case 29213: // Curse of the Plaguebringer - Noth
         case 28542: // Life Drain - Sapphiron
+        case 66588: // Flaming Spear
         case 54171: // Divine Storm
             spellInfo->MaxAffectedTargets = 3;
             ++count;
-            break;
-        case 66588: // Flaming Spear
-            spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_TARGET_ENEMY;
-            spellInfo->EffectImplicitTargetA[1] = TARGET_UNIT_TARGET_ENEMY;
             break;
         case 38310: // Multi-Shot
         case 53385: // Divine Storm (Damage)
@@ -4042,7 +4088,6 @@ void SpellMgr::LoadSpellCustomAttr()
         case 17941: // Shadow Trance
         case 22008: // Netherwind Focus
         case 31834: // Light's Grace
-        case 34477: // Misdirection
         case 34754: // Clearcasting
         case 34936: // Backlash
         case 48108: // Hot Streak
@@ -4054,11 +4099,6 @@ void SpellMgr::LoadSpellCustomAttr()
         case 44401: // Missile Barrage
             spellInfo->procCharges = 1;
             ++count;
-            break;
-        case 53257: // Cobra Strikes
-            spellInfo->procCharges = 2;
-            spellInfo->StackAmount = 0;
-            count++;
             break;
         case 44544: // Fingers of Frost
             spellInfo->EffectSpellClassMask[0] = flag96(685904631, 1151048, 0);
@@ -4099,13 +4139,6 @@ void SpellMgr::LoadSpellCustomAttr()
             spellInfo->EffectRadiusIndex[0] = 37;
             ++count;
             break;
-        // Ghoul's explosion - fix wrong target(?) + make instakill
-	    case 47496:
-	    spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_AREA_ENEMY_DST;
-	    spellInfo->EffectImplicitTargetB[0] = 0;
-	    spellInfo->Effect[1] = SPELL_EFFECT_INSTAKILL;
-	    ++count;
-	    break;
         // Master Shapeshifter: missing stance data for forms other than bear - bear version has correct data
         // To prevent aura staying on target after talent unlearned
         case 48420:
@@ -4127,15 +4160,6 @@ void SpellMgr::LoadSpellCustomAttr()
             break;
         case 30421: // Nether Portal - Perseverence
             spellInfo->EffectBasePoints[2] += 30000;
-            ++count;
-            break;
-        // some dummy spell only has dest, should push caster in this case
-        case 62324: // Throw Passenger
-            spellInfo->Targets |= TARGET_FLAG_UNIT_CASTER;
-            ++count;
-            break;
-        case 66665: // Burning Breath
-            spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_TARGET_ENEMY;
             ++count;
             break;
         case 16834: // Natural shapeshifter
@@ -4180,14 +4204,6 @@ void SpellMgr::LoadSpellCustomAttr()
             spellInfo->EffectImplicitTargetA[0] = TARGET_UNIT_CASTER;
             ++count;
             break;
-        case 12051: // Evocation - now we can interrupt this
-            spellInfo->InterruptFlags |= SPELL_INTERRUPT_FLAG_INTERRUPT;
-            ++count;
-            break;
-        case 42650: // Army of the Dead - now we can interrupt this
-            spellInfo->InterruptFlags = SPELL_INTERRUPT_FLAG_INTERRUPT;
-            ++count;
-            break;
         case 18500: // Wing Buffet
         case 33086: // Wild Bite
         case 49749: // Piercing Blow
@@ -4206,25 +4222,9 @@ void SpellMgr::LoadSpellCustomAttr()
             mSpellCustomAttr[i] |= SPELL_ATTR0_CU_IGNORE_ARMOR;
             ++count;
             break;
-        case 20224: // Seals of the Pure (Rank 1)
-        case 20225: // Seals of the Pure (Rank 2)
-        case 20330: // Seals of the Pure (Rank 3)
-        case 20331: // Seals of the Pure (Rank 4)
-        case 20332: // Seals of the Pure (Rank 5)
-            spellInfo->EffectSpellClassMask[EFFECT_0][1] = 0x20400800;
-            ++count;
-            break;
         case 63675: // Improved Devouring Plague
             spellInfo->AttributesEx3 |= SPELL_ATTR3_NO_DONE_BONUS;
             ++count;
-            break;
-        case 33206: // Pain Suppression
-            spellInfo->AttributesEx5 &= ~SPELL_ATTR5_USABLE_WHILE_STUNNED;
-            ++count;
-            break;
-        case 56278: // Read Pronouncement, missing EffectApplyAuraName
-            spellInfo->Effect[0] = SPELL_EFFECT_DUMMY;
-            count++;
             break;
         case 8145: // Tremor Totem (instant pulse)
         case 6474: // Earthbind Totem (instant pulse)
@@ -4272,37 +4272,20 @@ void SpellMgr::LoadSpellCustomAttr()
             spellInfo->AuraInterruptFlags = AURA_INTERRUPT_FLAG_HITBYSPELL | AURA_INTERRUPT_FLAG_TAKE_DAMAGE;
             ++count;
             break;
+        // TRIAL OF THE CRUSADER SPELLS
+        case 66258: // Infernal Eruption (10N)
+        case 67901: // Infernal Eruption (25N)
+            // increase duration from 15 to 18 seconds because caster is already
+            // unsummoned when spell missile hits the ground so nothing happen in result
+            spellInfo->DurationIndex = 85;
+            ++count;
+            break;
+        // ENDOF TRIAL OF THE CRUSADER SPELLS
+        //
         // ULDUAR SPELLS
         //
         case 63342: // Focused Eyebeam Summon Trigger (Kologarn)
             spellInfo->MaxAffectedTargets = 1;
-            ++count;
-            break;
-        case 64145: // Diminish Power
-        case 63882: // Death Ray Warning Visual
-        case 63886: // Death Ray Damage Visual
-            spellInfo->AttributesEx3 |= SPELL_ATTR3_STACK_FOR_DIFF_CASTERS;
-            ++count;
-            break;
-        case 64172: // Titanic Storm
-            spellInfo->excludeTargetAuraSpell = 65294; // Empowered
-            ++count;
-            break;
-        case 63830: // Malady of the Mind
-        case 63881: // Malady of the Mind proc
-        case 63795: // Psychosis
-            spellInfo->EffectImplicitTargetB[0] = TARGET_UNIT_TARGET_ANY;
-            spellInfo->EffectImplicitTargetB[1] = TARGET_UNIT_TARGET_ANY;
-            spellInfo->EffectImplicitTargetB[2] = TARGET_UNIT_TARGET_ANY;
-            ++count;
-            break;
-        case 63802: // Brain Link
-            spellInfo->MaxAffectedTargets = 2;
-            spellInfo->EffectRadiusIndex[0] = 12; // 100 yard
-            ++count;
-            break;
-        case 63050: // Sanity
-            spellInfo->AttributesEx3 |= SPELL_ATTR3_DEATH_PERSISTENT;
             ++count;
             break;
         case 62716: // Growth of Nature (Freya)
@@ -4432,7 +4415,7 @@ void SpellMgr::LoadSpellCustomAttr()
             ++count;
             break;
         case 70602: // Corruption
-            spellInfo->AttributesEx |= SPELL_ATTR1_STACK_FOR_DIFF_CASTERS;
+            spellInfo->AttributesEx3 |= SPELL_ATTR3_STACK_FOR_DIFF_CASTERS;
             ++count;
             break;
         case 70715: // Column of Frost (visual marker)
@@ -4464,24 +4447,6 @@ void SpellMgr::LoadSpellCustomAttr()
             spellInfo->Effect[1] = 0;
             ++count;
             break;
-        case 49206: // Summon Gargoyle
-            spellInfo->DurationIndex = 587;
-            ++count;
-            break;
-        case 51590: // Toss Ice Boulder
-            spellInfo->MaxAffectedTargets = 1;
-            ++count;
-            break;
-        case 74412: // Emergency Recall [Final]
-            for (int8 i = 0; i < 3; ++i)
-                spellInfo->EffectImplicitTargetB[i] = TARGET_UNIT_TARGET_ANY;
-            ++count;
-            break;
-        case 75545: case 75536: // Explosion (prevent error message in console)
-        case 75553:             // Emergency Recall [Camera trigger]
-            spellInfo->EffectImplicitTargetB[0] = TARGET_UNIT_TARGET_ANY;
-            ++count;
-            break;
         default:
             break;
         }
@@ -4503,23 +4468,10 @@ void SpellMgr::LoadSpellCustomAttr()
                 // Roar
                 else if (spellInfo->SpellFamilyFlags[0] & 0x8)
                     mSpellCustomAttr[i] |= SPELL_ATTR0_CU_AURA_CC;
-                // Rake
-                else if (spellInfo->SpellFamilyFlags[0] & 0x1000)
-                    mSpellCustomAttr[i] |= SPELL_ATTR0_CU_IGNORE_ARMOR;
                 else
                     break;
                 ++count;
                 break;
-            case SPELLFAMILY_PRIEST:
-                // Twin Disciplines should affect at Prayer of Mending
-                if (spellInfo->SpellIconID == 2292)
-                    spellInfo->EffectSpellClassMask[0] = flag96(0, 622642, 2581594112);
-                // Spiritual Healing should affect at Prayer of Mending
-                else if (spellInfo->SpellIconID == 46)
-                    spellInfo->EffectSpellClassMask[0][1] |= 0x20;
-                // Divine Providence should affect at Prayer of Mending
-                else if (spellInfo->SpellIconID == 2845 && spellInfo->Id != 64844)
-                    spellInfo->EffectSpellClassMask[0][1] |= 0x20;
             case SPELLFAMILY_PALADIN:
                 // Seals of the Pure should affect Seal of Righteousness
                 if (spellInfo->SpellIconID == 25 && spellInfo->Attributes & SPELL_ATTR0_PASSIVE)

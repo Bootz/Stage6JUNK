@@ -46,9 +46,9 @@ class npc_blood_knight_stillblade : public CreatureScript
 public:
     npc_blood_knight_stillblade() : CreatureScript("npc_blood_knight_stillblade") { }
 
-    CreatureAI* GetAI(Creature* pCreature) const
+    CreatureAI* GetAI(Creature* creature) const
     {
-        return new npc_blood_knight_stillbladeAI (pCreature);
+        return new npc_blood_knight_stillbladeAI (creature);
     }
 
     struct npc_blood_knight_stillbladeAI : public ScriptedAI
@@ -90,12 +90,12 @@ public:
             if ((Spellkind->Id == SPELL_SHIMMERING_VESSEL) && !spellHit &&
                 (Hitter->GetTypeId() == TYPEID_PLAYER) && (CAST_PLR(Hitter)->IsActiveQuest(QUEST_REDEEMING_THE_DEAD)))
             {
-                CAST_PLR(Hitter)->KilledMonsterCredit(17768, 0);
+                CAST_PLR(Hitter)->AreaExploredOrEventHappens(QUEST_REDEEMING_THE_DEAD);
                 DoCast(me, SPELL_REVIVE_SELF);
                 me->SetStandState(UNIT_STAND_STATE_STAND);
                 me->SetUInt32Value(UNIT_DYNAMIC_FLAGS, 0);
                 //me->RemoveAllAuras();
-                DoScriptText(SAY_HEAL, me, Hitter);
+                DoScriptText(SAY_HEAL, me);
                 spellHit = true;
             }
         }

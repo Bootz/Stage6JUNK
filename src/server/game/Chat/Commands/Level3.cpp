@@ -2409,27 +2409,14 @@ bool ChatHandler::HandleListAurasCommand (const char * /*args*/)
         Aura const* aura = aurApp->GetBase();
         char const* name = aura->GetSpellProto()->SpellName[GetSessionDbcLocale()];
 
-        if (m_session)
-        {
-            std::ostringstream ss_name;
-            ss_name << "|cffffffff|Hspell:" << aura->GetId() << "|h[" << name << "]|h|r";
+        std::ostringstream ss_name;
+        ss_name << "|cffffffff|Hspell:" << aura->GetId() << "|h[" << name << "]|h|r";
 
-            PSendSysMessage(LANG_COMMAND_TARGET_AURADETAIL, aura->GetId(), aurApp->GetEffectMask(),
-                aura->GetCharges(), aura->GetStackAmount(), aurApp->GetSlot(),
-                aura->GetDuration(), aura->GetMaxDuration(),
-                ss_name.str().c_str(),
-                (aura->IsPassive() ? passiveStr : ""), (talent ? talentStr : ""),
-                IS_PLAYER_GUID(aura->GetCasterGUID()) ? "player" : "creature", GUID_LOPART(aura->GetCasterGUID()));
-        }
-        else
-        {
-            PSendSysMessage(LANG_COMMAND_TARGET_AURADETAIL, aura->GetId(), aurApp->GetEffectMask(),
-                aura->GetCharges(), aura->GetStackAmount(), aurApp->GetSlot(),
-                aura->GetDuration(), aura->GetMaxDuration(),
-                name,
-                (aura->IsPassive() ? passiveStr : ""), (talent ? talentStr : ""),
-                IS_PLAYER_GUID(aura->GetCasterGUID()) ? "player" : "creature", GUID_LOPART(aura->GetCasterGUID()));
-        }
+        PSendSysMessage(LANG_COMMAND_TARGET_AURADETAIL, aura->GetId(), (m_session ? ss_name.str().c_str() : name),
+		    aurApp->GetEffectMask(), aura->GetCharges(), aura->GetStackAmount(), aurApp->GetSlot(),
+            aura->GetDuration(), aura->GetMaxDuration(), (aura->IsPassive() ? passiveStr : ""),
+		    (talent ? talentStr : ""), IS_PLAYER_GUID(aura->GetCasterGUID()) ? "player" : "creature",
+		    GUID_LOPART(aura->GetCasterGUID()));
     }
     for (uint16 i = 0; i < TOTAL_AURAS; ++i)
     {
@@ -2438,13 +2425,6 @@ bool ChatHandler::HandleListAurasCommand (const char * /*args*/)
         PSendSysMessage(LANG_COMMAND_TARGET_LISTAURATYPE, uAuraList.size(), i);
         for (Unit::AuraEffectList::const_iterator itr = uAuraList.begin(); itr != uAuraList.end(); ++itr)
         {
-            //bool talent = GetTalentSpellCost((*itr)->GetId()) > 0;
-
-            char const* name = (*itr)->GetSpellProto()->SpellName[GetSessionDbcLocale()];
-
-            std::ostringstream ss_name;
-            ss_name << "|cffffffff|Hspell:" << (*itr)->GetId() << "|h[" << name << "]|h|r";
-
             PSendSysMessage(LANG_COMMAND_TARGET_AURASIMPLE, (*itr)->GetId(), (*itr)->GetEffIndex(),
                 (*itr)->GetAmount());
         }
@@ -3143,25 +3123,6 @@ bool ChatHandler::HandleBanInfoCharacterCommand(const char *args)
     return true;
 }
 
-bool ChatHandler::HandleBanInfoAccountByCharCommand(const char *args)
-{
-    Player* target;
-    uint64 target_guid;
-    if (!extractPlayerTarget((char*)args, &target, &target_guid))
-        return false;
-
-    uint32 accountid = target ? target->GetSession()->GetAccountId() : sObjectMgr->GetPlayerAccountIdByGUID(target_guid);
-
-    std::string accountname;
-    if (!sAccountMgr->GetName(accountid,accountname))
-    {
-        PSendSysMessage(LANG_BANINFO_NOCHARACTER);
-        return true;
-    }
-
-    return HandleBanInfoHelper(accountid, accountname.c_str());
-}
-
 bool ChatHandler::HandleBanInfoHelper(uint32 accountid, char const* accountname)
 {
     QueryResult result = LoginDatabase.PQuery("SELECT FROM_UNIXTIME(bandate), unbandate-bandate, active, unbandate, banreason, bannedby FROM account_banned WHERE id = '%u' ORDER BY bandate ASC", accountid);
@@ -3331,26 +3292,6 @@ bool ChatHandler::HandleBanListAccountCommand(const char *args)
     if (!result)
     {
         PSendSysMessage(LANG_BANLIST_NOACCOUNT);
-        return true;
-    }
-
-    return HandleBanListHelper(result);
-}
-
-bool ChatHandler::HandleBanListPlayerAccountCommand(const char *args)
-{
-    LoginDatabase.Execute("DELETE FROM ip_banned WHERE unbandate <= UNIX_TIMESTAMP() AND unbandate<>bandate");
-
-    char* cFilter = strtok((char*)args, " ");
-    if(!cFilter)
-        return false;
-
-    std::string filter = cFilter;
-    LoginDatabase.EscapeString(filter);
-    QueryResult result = CharacterDatabase.PQuery("SELECT account FROM characters WHERE name "_LIKE_" "_CONCAT3_("'%%'","'%s'","'%%'"),filter.c_str());
-    if (!result)
-    {
-        PSendSysMessage(LANG_BANLIST_NOCHARACTER);
         return true;
     }
 
